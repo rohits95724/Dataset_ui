@@ -174,7 +174,7 @@ export default function Dashboard() {
           return (
             <div className="flex items-center gap-3 py-1">
               <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback className="bg-emerald-150 text-emerald-800 text-xs font-extrabold dark:bg-emerald-950/40 dark:text-emerald-300">
+                <AvatarFallback className="bg-emerald-200 text-emerald-800 text-xs font-extrabold dark:bg-emerald-950/40 dark:text-emerald-300">
                   {getInitials(name)}
                 </AvatarFallback>
               </Avatar>
