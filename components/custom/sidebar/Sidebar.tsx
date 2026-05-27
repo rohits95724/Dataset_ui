@@ -26,7 +26,7 @@ import { useAuth } from "@/context/auth-context";
 
 export const Sidebar: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const { originalData, filters, setColumnFilter, resetFilters } = useDataset();
+  const { originalData, filters, setColumnFilter, resetFilters, filterVocabulary, isApiMode } = useDataset();
 
   // Search filter query states for dropdowns
   const [specialtySearch, setSpecialtySearch] = useState("");
@@ -81,6 +81,23 @@ export const Sidebar: React.FC = () => {
       return Array.from(set).sort();
     };
 
+    if (isApiMode && filterVocabulary) {
+      return {
+        specialties: filterVocabulary.specialties || [],
+        systems: filterVocabulary.system_of_medicine || [],
+        locations: getUniqueVals("hprWorkDetails___districtName"),
+        genders: filterVocabulary.genders || [],
+        languages: getUniqueVals("piLanguage", true),
+        facilityOwnerships: filterVocabulary.ownerships || [],
+        facilityTypes: filterVocabulary.facility_types || [],
+        degrees: getUniqueVals("doctorMedicalQualifications___courseId_name"),
+        doctorTypes: getUniqueVals("doctorType"),
+        states: filterVocabulary.states || [],
+        verificationStatuses: filterVocabulary.workplace_verification_statuses || [],
+        colleges: filterVocabulary.colleges || [],
+      };
+    }
+
     return {
       specialties: getUniqueVals("hprSpecialitys"),
       systems: getUniqueVals("systemOfMedicine"),
@@ -97,7 +114,7 @@ export const Sidebar: React.FC = () => {
       verificationStatuses: getUniqueVals("doctors_work.verificationStatus"),
       colleges: getUniqueVals("doctors_qualifications.collegeId.name"),
     };
-  }, [originalData]);
+  }, [originalData, isApiMode, filterVocabulary]);
 
   if (!isAuthenticated) return null;
 

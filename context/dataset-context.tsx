@@ -1,6 +1,10 @@
 "use client";
 import React, { createContext, useContext, useState, useMemo, ReactNode, useCallback, useEffect } from "react";
 import { generateColumnMetadata, ColumnMeta } from "@/utils/filterGenerator";
+import { useAuth } from "./auth-context";
+import { useToast } from "./toast-context";
+import { doctorService } from "@/services/doctor-services/doctorService";
+import { FilterOptionsResponse } from "@/types/doctor";
 
 // Define a type alias to replace explicit 'any' types for spreadsheet rows
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -15,7 +19,7 @@ export interface FilterState {
 }
 
 interface DatasetContextProps {
-  SpreadsheetRow?: never; // placeholder to prevent unused type warning if not exported directly
+  SpreadsheetRow?: never;
   originalData: SpreadsheetRow[];
   data: SpreadsheetRow[];
   columns: ColumnMeta[];
@@ -25,6 +29,14 @@ interface DatasetContextProps {
   uploadProgress: number;
   isFilterPanelOpen: boolean;
   filters: FilterState;
+
+  // Pagination parameters
+  isApiMode: boolean;
+  cursor: number;
+  limit: number;
+  nextCursor: number | null;
+  prevCursors: number[];
+  filterVocabulary: FilterOptionsResponse | null;
 
   setUploadedData: (data: SpreadsheetRow[], fileName: string, fileSize: string) => void;
   setGlobalSearch: (search: string) => void;
@@ -36,177 +48,16 @@ interface DatasetContextProps {
   setUploadProgress: (progress: number) => void;
   setIsLoading: (loading: boolean) => void;
   loadSeedData: () => void;
+
+  setLimit: (limit: number) => void;
+  goToNextPage: () => void;
+  goToPrevPage: () => void;
+  updateDoctor: (updatedDoctor: SpreadsheetRow) => void;
 }
 
 const DatasetContext = createContext<DatasetContextProps | undefined>(undefined);
 
-// Helper to generate seed patient data
-// Helper to generate seed doctor data
-function generateSeedDoctors(): SpreadsheetRow[] {
-  const firstNamesMale = ["Arjun", "Aditya", "Rahul", "Amit", "Rajesh", "Sanjay", "Vijay", "Anil", "Vikram", "Sunil", "Ravi", "Sandeep", "Karan", "Abhishek", "Rohan", "Deepak", "Vivek", "Manish", "Prakash", "Suresh", "Vikrant", "Devendra"];
-  const firstNamesFemale = ["Ananya", "Priyanka", "Sunita", "Deepika", "Kiran", "Shalini", "Pooja", "Meera", "Neha", "Divya", "Aishwarya", "Anjali", "Ritu", "Sneha", "Kriti", "Aditi", "Preeti", "Tanvi", "Radhika", "Swati", "Shruti", "Kavita"];
-  const lastNames = ["Sharma", "Verma", "Gupta", "Singh", "Patel", "Reddy", "Nair", "Joshi", "Iyer", "Choudhury", "Kumar", "Rao", "Deshmukh", "Banerjee", "Sen", "Mehta", "Bhat", "Prasad", "Mishra", "Pandey", "Saxena", "Gill"];
-  const specialties = ["Cardiology", "Neurology", "Pediatrics", "Orthopedics", "General Medicine", "Dermatology", "Oncology", "Gynaecology", "Ophthalmology"];
-  const systemsOfMedicine = ["Modern Medicine (Allopathy)", "Ayurveda", "Homeopathy", "Unani", "Siddha"];
-  const degreesMap: Record<string, string[]> = {
-    "Modern Medicine (Allopathy)": ["MBBS", "MBBS, MD", "MBBS, MS", "DNB", "MBBS, MD, DM"],
-    "Ayurveda": ["BAMS", "BAMS, MS (Ayu)"],
-    "Homeopathy": ["BHMS", "BHMS, MD (Hom)"],
-    "Unani": ["BUMS"],
-    "Siddha": ["BSMS"]
-  };
-  const districts = ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Bikaner", "Ajmer", "Alwar", "Sikar", "Bhilwara", "Sri Ganganagar"];
-  const statesMap: Record<string, string> = {
-    "Jaipur": "Rajasthan",
-    "Jodhpur": "Rajasthan",
-    "Udaipur": "Rajasthan",
-    "Kota": "Rajasthan",
-    "Bikaner": "Rajasthan",
-    "Ajmer": "Rajasthan",
-    "Alwar": "Rajasthan",
-    "Sikar": "Rajasthan",
-    "Bhilwara": "Rajasthan",
-    "Sri Ganganagar": "Rajasthan"
-  };
-  const councilsMap: Record<string, string> = {
-    "Rajasthan": "Rajasthan Medical Council",
-    "Delhi": "Delhi Medical Council",
-    "Gujarat": "Gujarat Medical Council"
-  };
-  const languagesList = ["English", "Hindi", "Rajasthani", "Gujarati", "Punjabi"];
-  const facilityOwnerships = ["Private", "Government", "ESI", "Trust", "Corporate"];
-  const facilityTypes = ["PHC (Primary Health Centre)", "CHC (Community Health Centre)", "District Hospital", "Sub Divisional Hospital", "Medical College Hospital", "Private Clinic", "Corporate Hospital"];
-  const hospitalsMap: Record<string, string[]> = {
-    "Private": ["Bhandari Hospital", "Apex Hospital", "Jeevan Rekha Hospital", "Fortis Escorts Jaipur"],
-    "Government": ["SMS Hospital Jaipur", "MDM Hospital Jodhpur", "PBM Hospital Bikaner", "MBS Hospital Kota"],
-    "ESI": ["ESI Hospital Jaipur", "ESI Dispensary Jodhpur"],
-    "Trust": ["Santokba Durlabhji Memorial Hospital", "Bhagwan Mahaveer Cancer Hospital"],
-    "Corporate": ["EHCC Hospital", "Manipal Hospital Jaipur", "Narayana Multispeciality"]
-  };
-  const collegesList = [
-    "SMS Medical College, Jaipur",
-    "Sardar Patel Medical College, Bikaner",
-    "RNT Medical College, Udaipur",
-    "Dr. S.N. Medical College, Jodhpur",
-    "Jawaharlal Nehru Medical College, Ajmer",
-    "Government Medical College, Kota",
-    "RUHS College of Medical Sciences, Jaipur",
-    "Harvard Medical School, USA",
-    "Oxford Medical School, UK",
-    "Beijing Medical University, China",
-    "Volgograd State Medical University, Russia"
-  ];
-
-  const seed = [];
-  // Generate exactly 20,299 records as per the Rajasthan Registry Database Strategy
-  for (let i = 1; i <= 20299; i++) {
-    const isMale = Math.random() > 0.5;
-    const gender = isMale ? "Male" : "Female";
-    const fn = isMale 
-      ? firstNamesMale[Math.floor(Math.random() * firstNamesMale.length)]
-      : firstNamesFemale[Math.floor(Math.random() * firstNamesFemale.length)];
-    const ln = lastNames[Math.floor(Math.random() * lastNames.length)];
-    const doctorName = `Dr. ${fn} ${ln}`;
-
-    const specialty = specialties[Math.floor(Math.random() * specialties.length)];
-    const system = systemsOfMedicine[Math.floor(Math.random() * systemsOfMedicine.length)];
-    const degrees = degreesMap[system] || ["MBBS"];
-    const degree = degrees[Math.floor(Math.random() * degrees.length)];
-
-    const experience = Math.floor(Math.random() * 32) + 1; // 1 to 32 yrs
-    const district = districts[Math.floor(Math.random() * districts.length)];
-    
-    // 95% Rajasthan, 5% other states for filtering realism
-    const state = Math.random() > 0.05 ? "Rajasthan" : (Math.random() > 0.5 ? "Delhi" : "Gujarat");
-    const council = councilsMap[state] || "Medical Council of India";
-    
-    // Languages: select 1 to 3 random languages
-    const numLangs = Math.floor(Math.random() * 3) + 1;
-    const selectedLangs = [];
-    const tempLangs = [...languagesList];
-    for (let l = 0; l < numLangs; l++) {
-      const idx = Math.floor(Math.random() * tempLangs.length);
-      selectedLangs.push(tempLangs.splice(idx, 1)[0]);
-    }
-    const piLanguage = selectedLangs.join(", ");
-
-    const ownership = facilityOwnerships[Math.floor(Math.random() * facilityOwnerships.length)];
-    const hosps = hospitalsMap[ownership] || ["General Clinic"];
-    const hospitalName = hosps[Math.floor(Math.random() * hosps.length)];
-    const facilityType = facilityTypes[Math.floor(Math.random() * facilityTypes.length)];
-
-    const regYear = 2026 - experience - Math.floor(Math.random() * 3);
-    const regNum = `REG-${regYear}-${String(10000 + i).slice(1)}`;
-
-    const regStatus = Math.random() > 0.15 ? "Verified" : (Math.random() > 0.5 ? "Pending" : "Unverified");
-    const status = Math.random() > 0.1 ? "Active" : "Inactive";
-    const verificationStatus = Math.random() > 0.2 ? "Verified" : (Math.random() > 0.5 ? "Pending" : "Unverified");
-
-    const phone = `+91 ${90000 + Math.floor(Math.random() * 9999)} ${10000 + Math.floor(Math.random() * 89999)}`;
-    const email = `${fn.toLowerCase()}.${ln.toLowerCase()}@${hospitalName.toLowerCase().replace(/\s+/g, "")}.org`;
-
-    // derived doctor type
-    const doctorType = (ownership === "Government" || ownership === "ESI") ? "Government Doctor" : "Private Doctor";
-    const governmentEmployee = doctorType === "Government Doctor";
-
-    // verification statuses
-    const isRegistrationVerified = regStatus === "Verified";
-    const isPhoneVerified = Math.random() > 0.15;
-    const isEmailVerified = Math.random() > 0.2;
-    const isQualificationsVerified = regStatus === "Verified";
-    const isWorkVerified = Math.random() > 0.1;
-
-    // GPS coordinate generation within Rajasthan bounding box
-    // Lat: 23.3 to 30.2, Long: 69.3 to 78.2
-    const lat = 23.3 + Math.random() * (30.2 - 23.3);
-    const lng = 69.3 + Math.random() * (78.2 - 69.3);
-
-    // College selection & foreign educated check
-    const college = collegesList[Math.floor(Math.random() * collegesList.length)];
-    const isForeignEducated = college.includes("USA") || college.includes("UK") || college.includes("China") || college.includes("Russia");
-
-    seed.push({
-      "id": `DOC-${String(i).padStart(5, "0")}`,
-      "doctorName": doctorName,
-      "gender": gender,
-      "hprSpecialitys": specialty,
-      "systemOfMedicine": system,
-      "doctorMedicalQualifications___courseId_name": degree,
-      "workExperienceInYear": experience,
-      "hprWorkDetails___districtName": district,
-      "currentCity": district,
-      "hprWorkDetails___stateName": state,
-      "stateMedicalCouncil": council,
-      "piLanguage": piLanguage,
-      "hprWorkDetails___facilityOwnership": ownership,
-      "hospitalName": hospitalName,
-      "registrationNumber": regNum,
-      "registrationYear": regYear,
-      "registrationStatus": regStatus,
-      "status": status,
-      "phoneNumber": phone,
-      "email": email,
-      "doctorType": doctorType,
-      "isRegistrationVerified": isRegistrationVerified,
-      "isPhoneVerified": isPhoneVerified,
-      "isEmailVerified": isEmailVerified,
-      "isQualificationsVerified": isQualificationsVerified,
-      "isWorkVerified": isWorkVerified,
-      
-      // New requested database columns
-      "doctors_work.facilityLat": lat,
-      "doctors_work.facilityLong": lng,
-      "doctors_main.stateName": state,
-      "doctors_work.verificationStatus": verificationStatus,
-      "doctors_main.governmentEmployee": governmentEmployee,
-      "doctors_work.facilityType": facilityType,
-      "doctors_work.facilityOwnership": ownership,
-      "doctors_qualifications.collegeId.name": college,
-      "isForeignEducated": isForeignEducated
-    });
-  }
-  return seed;
-}
+// Dummy seed doctor data generator has been completely removed to prioritize live API data.
 
 function getHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius in km
@@ -387,6 +238,9 @@ const runFiltering = (
   return filtered;
 };
 
+// normalizeDoctor is called internally by doctorService.getDoctors()
+
+
 export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [originalData, setOriginalData] = useState<SpreadsheetRow[]>([]);
   const [columns, setColumns] = useState<ColumnMeta[]>([]);
@@ -395,20 +249,27 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isLoading, setIsLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isFilterPanelOpen, setFilterPanelOpen] = useState(false);
-  
+
   const [filters, setFilters] = useState<FilterState>({
     globalSearch: "",
     columnFilters: {},
   });
 
-  // Calculate filtered data reactively without triggering cascading state renders
-  const data = useMemo(() => {
-    return runFiltering(originalData, filters, columns);
-  }, [originalData, filters, columns]);
+  // Pagination & API Mode States
+  const [cursor, setCursor] = useState<number>(0);
+  const [limit, setLimit] = useState<number>(20);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [prevCursors, setPrevCursors] = useState<number[]>([]);
+  const [filterVocabulary, setFilterVocabulary] = useState<FilterOptionsResponse | null>(null);
+
+  const { isAuthenticated } = useAuth();
+  const { addToast } = useToast();
+
+  const isApiMode = fileName === "Live API Registry";
 
   const setUploadedData = useCallback((newData: SpreadsheetRow[], name: string, size: string) => {
     const cols = generateColumnMetadata(newData);
-    
+
     // Initialize filters structure
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const initialColumnFilters: { [key: string]: any } = {};
@@ -442,9 +303,126 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
       globalSearch: "",
       columnFilters: initialColumnFilters,
     });
+    setCursor(0);
+    setPrevCursors([]);
     setIsLoading(false);
     setUploadProgress(100);
   }, []);
+
+  const fetchDoctorsFromApi = useCallback(async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      const { globalSearch, columnFilters } = filters;
+
+      if (globalSearch && globalSearch.trim() !== "") {
+        params.append("q", globalSearch.trim());
+      }
+
+      const gov = columnFilters["doctors_main.governmentEmployee"];
+      if (gov && gov !== "all") {
+        params.append("government_employee", gov);
+      }
+
+      const foreign = columnFilters["isForeignEducated"];
+      if (foreign && foreign !== "all") {
+        params.append("is_foreign_educated", foreign);
+      }
+
+      const exp = columnFilters["workExperienceInYear"];
+      if (exp) {
+        if (exp.min !== undefined && exp.min !== "") {
+          params.append("experience_min", String(exp.min));
+        }
+        if (exp.max !== undefined && exp.max !== "") {
+          params.append("experience_max", String(exp.max));
+        }
+      }
+
+      const appendArrayParam = (paramName: string, filterKey: string) => {
+        const filterVals = columnFilters[filterKey];
+        if (Array.isArray(filterVals) && filterVals.length > 0) {
+          filterVals.forEach((val) => {
+            params.append(paramName, String(val));
+          });
+        }
+      };
+
+      appendArrayParam("specialty", "hprSpecialitys");
+      appendArrayParam("system_of_medicine", "systemOfMedicine");
+      appendArrayParam("state_source", "doctors_main.stateName");
+      appendArrayParam("verification_status", "doctors_work.verificationStatus");
+      appendArrayParam("facility_type", "doctors_work.facilityType");
+      appendArrayParam("facility_ownership", "doctors_work.facilityOwnership");
+      appendArrayParam("college_name", "doctors_qualifications.collegeId.name");
+      appendArrayParam("doctor_type", "doctorType");
+      appendArrayParam("gender", "gender");
+      appendArrayParam("pi_language", "piLanguage");
+      appendArrayParam("course_name", "doctorMedicalQualifications___courseId_name");
+
+      // Apply page limits and pagination cursors
+      params.append("limit", String(limit));
+      if (cursor > 0) {
+        params.append("cursor", String(cursor));
+      }
+
+      const resData = await doctorService.getDoctors(params);
+      const normalized = Array.isArray(resData?.items) ? resData.items : (Array.isArray(resData) ? resData : []);
+
+      setOriginalData(normalized);
+      setNextCursor(resData?.next_cursor ?? null);
+
+      if (normalized.length > 0) {
+        const cols = generateColumnMetadata(normalized as unknown as Record<string, unknown>[]);
+        setColumns(cols);
+      }
+      setFileName("Live API Registry");
+      setFileSize("Active connection");
+    } catch (error) {
+      console.error("Failed to fetch doctors from backend API:", error);
+      addToast("Failed to connect to FastAPI.", "error");
+      setOriginalData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, filters, cursor, limit, addToast]);
+
+  const loadSeedData = useCallback(() => {
+    fetchDoctorsFromApi();
+  }, [fetchDoctorsFromApi]);
+
+  // Load the API-sourced filters vocabulary when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      doctorService.getFilterOptions()
+        .then((vocab) => {
+          setFilterVocabulary(vocab);
+        })
+        .catch((err) => {
+          console.error("Failed to load backend filter options vocabulary", err);
+        });
+    } else {
+      setFilterVocabulary(null);
+    }
+  }, [isAuthenticated]);
+
+  // Reset pagination cursor when filters or limit change
+  useEffect(() => {
+    setCursor(0);
+    setPrevCursors([]);
+  }, [filters.columnFilters, filters.globalSearch, limit]);
+
+  // Calculate filtered data reactively (only in client/mock mode, API mode just returns active page)
+  const data = useMemo(() => {
+    if (isApiMode) {
+      return originalData;
+    }
+    return runFiltering(originalData, filters, columns);
+  }, [originalData, filters, columns, isApiMode]);
 
   const setGlobalSearch = useCallback((search: string) => {
     setFilters((prev) => ({
@@ -493,20 +471,54 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
       globalSearch: "",
       columnFilters: resetColFilters,
     });
+    setCursor(0);
+    setPrevCursors([]);
   }, [columns]);
 
   const toggleFilterPanel = useCallback(() => {
     setFilterPanelOpen((prev) => !prev);
   }, []);
 
-  const loadSeedData = useCallback(() => {
-    const mockData = generateSeedDoctors();
-    setUploadedData(mockData, "doctors_registry_records.xlsx", "124.2 KB");
-  }, [setUploadedData]);
+  const goToNextPage = useCallback(() => {
+    if (nextCursor !== null) {
+      setPrevCursors((prev) => [...prev, cursor]);
+      setCursor(nextCursor);
+    }
+  }, [nextCursor, cursor]);
+
+  const goToPrevPage = useCallback(() => {
+    if (prevCursors.length > 0) {
+      const prev = [...prevCursors];
+      const prevCursor = prev.pop()!;
+      setPrevCursors(prev);
+      setCursor(prevCursor);
+    }
+  }, [prevCursors]);
+
+  const updateDoctor = useCallback((updatedDoctor: SpreadsheetRow) => {
+    setOriginalData((prev) =>
+      prev.map((doc) => (doc.id === updatedDoctor.id ? updatedDoctor : doc))
+    );
+  }, []);
 
   useEffect(() => {
-    loadSeedData();
-  }, [loadSeedData]);
+    if (isAuthenticated && originalData.length === 0) {
+      loadSeedData();
+    }
+  }, [isAuthenticated, originalData.length, loadSeedData]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setOriginalData([]);
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      fetchDoctorsFromApi();
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [filters, cursor, limit, isAuthenticated, fetchDoctorsFromApi]);
 
   return (
     <DatasetContext.Provider
@@ -520,6 +532,12 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
         uploadProgress,
         isFilterPanelOpen,
         filters,
+        isApiMode,
+        cursor,
+        limit,
+        nextCursor,
+        prevCursors,
+        filterVocabulary,
         setUploadedData,
         setGlobalSearch,
         setColumnFilter,
@@ -529,6 +547,10 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
         setUploadProgress,
         setIsLoading,
         loadSeedData,
+        setLimit,
+        goToNextPage,
+        goToPrevPage,
+        updateDoctor,
       }}
     >
       {children}

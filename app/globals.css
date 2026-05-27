@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@source "./**/*.{ts,tsx}";
+@source "./hello/page.tsx";
+@source "../components/**/*.{ts,tsx}";
+
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -123,3 +128,4 @@
     @apply bg-background text-foreground;
   }
 }
+/* rebuild trigger 2 */

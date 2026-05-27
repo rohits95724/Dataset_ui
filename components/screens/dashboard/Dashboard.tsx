@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +25,7 @@ import { useDataset } from "@/context/dataset-context";
 import { useToast } from "@/context/toast-context";
 import { useModal } from "@/context/modal-context";
 import { DoctorDetailsDrawer } from "./components/DoctorDetailsDrawer";
+import { DoctorEditDrawer } from "./components/DoctorEditDrawer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,6 +53,14 @@ export default function Dashboard() {
     resetFilters,
     loadSeedData,
     setUploadedData,
+    isApiMode,
+    cursor,
+    limit,
+    nextCursor,
+    prevCursors,
+    setLimit,
+    goToNextPage,
+    goToPrevPage,
   } = useDataset();
   const { addToast } = useToast();
   const { openDrawer } = useModal();
@@ -278,14 +288,24 @@ export default function Dashboard() {
         id: "action",
         header: "Action",
         cell: ({ row }: any) => (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openDrawer(<DoctorDetailsDrawer doctor={row.original} />)}
-            className="h-7 text-xs font-semibold hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/20 border-zinc-200 dark:border-zinc-800 cursor-pointer"
-          >
-            View
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openDrawer(<DoctorDetailsDrawer doctor={row.original} />)}
+              className="h-7 text-xs font-semibold hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/20 border-zinc-200 dark:border-zinc-800 cursor-pointer"
+            >
+              View
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openDrawer(<DoctorEditDrawer doctor={row.original} />)}
+              className="h-7 text-xs font-semibold hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/20 border-zinc-200 dark:border-zinc-800 cursor-pointer"
+            >
+              Edit
+            </Button>
+          </div>
         ),
       },
     ];
@@ -306,13 +326,10 @@ export default function Dashboard() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: isApiMode,
   });
 
-  const handleClearSheet = () => {
-    setUploadedData([], "", "");
-    setRowSelection({});
-    addToast("Doctor registry cleared.", "info");
-  };
+
 
   if (authLoading || !isAuthenticated) {
     return (
@@ -489,32 +506,53 @@ export default function Dashboard() {
               {/* Pagination Controls */}
               <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 text-[11px]">
                 {/* Statistics counts */}
-                <div className="text-muted-foreground font-medium">
-                  Showing{" "}
-                  <span className="font-bold text-zinc-900 dark:text-white">
-                    {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-bold text-zinc-900 dark:text-white">
-                    {Math.min(
-                      (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                      data.length
-                    )}
-                  </span>{" "}
-                  of{" "}
-                  <span className="font-bold text-zinc-900 dark:text-white">
-                    {data.length}
-                  </span>{" "}
-                  practitioners
-                </div>
+                {isApiMode ? (
+                  <div className="text-muted-foreground font-medium">
+                    Showing{" "}
+                    <span className="font-bold text-zinc-900 dark:text-white">
+                      {data.length > 0 ? cursor + 1 : 0}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-bold text-zinc-900 dark:text-white">
+                      {cursor + data.length}
+                    </span>{" "}
+                    practitioners
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground font-medium">
+                    Showing{" "}
+                    <span className="font-bold text-zinc-900 dark:text-white">
+                      {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-bold text-zinc-900 dark:text-white">
+                      {Math.min(
+                        (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                        data.length
+                      )}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-bold text-zinc-900 dark:text-white">
+                      {data.length}
+                    </span>{" "}
+                    practitioners
+                  </div>
+                )}
 
                 {/* Page Navigation Actions */}
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Rows per page:</span>
                     <select
-                      value={table.getState().pagination.pageSize}
-                      onChange={(e) => table.setPageSize(Number(e.target.value))}
+                      value={isApiMode ? limit : table.getState().pagination.pageSize}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (isApiMode) {
+                          setLimit(val);
+                        } else {
+                          table.setPageSize(val);
+                        }
+                      }}
                       className="border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 px-2 py-1 font-semibold text-zinc-800 dark:text-zinc-200 outline-none text-[11px] cursor-pointer"
                     >
                       {[10, 20, 30, 40, 50].map((size) => (
@@ -530,8 +568,8 @@ export default function Dashboard() {
                     <Button
                       variant="outline"
                       size="icon-sm"
-                      onClick={() => table.previousPage()}
-                      disabled={!table.getCanPreviousPage()}
+                      onClick={() => isApiMode ? goToPrevPage() : table.previousPage()}
+                      disabled={isApiMode ? prevCursors.length === 0 : !table.getCanPreviousPage()}
                       className="cursor-pointer h-7 w-7"
                     >
                       {"<"}
@@ -539,15 +577,15 @@ export default function Dashboard() {
                     <span className="text-muted-foreground font-semibold px-2">
                       Page{" "}
                       <span className="text-zinc-900 dark:text-white font-extrabold">
-                        {table.getState().pagination.pageIndex + 1}
+                        {isApiMode ? prevCursors.length + 1 : table.getState().pagination.pageIndex + 1}
                       </span>{" "}
-                      of {table.getPageCount() || 1}
+                      {!isApiMode && `of ${table.getPageCount() || 1}`}
                     </span>
                     <Button
                       variant="outline"
                       size="icon-sm"
-                      onClick={() => table.nextPage()}
-                      disabled={!table.getCanNextPage()}
+                      onClick={() => isApiMode ? goToNextPage() : table.nextPage()}
+                      disabled={isApiMode ? nextCursor === null : !table.getCanNextPage()}
                       className="cursor-pointer h-7 w-7"
                     >
                       {">"}
