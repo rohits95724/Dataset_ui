@@ -4,6 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 import { Doctor, MapDoctor } from "@/types/doctor";
 import { useModal } from "@/context/modal-context";
 import { DoctorDetailsDrawer } from "../../dashboard/components/DoctorDetailsDrawer";
