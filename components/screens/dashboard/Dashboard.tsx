@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -215,9 +215,13 @@ export default function Dashboard() {
           const name = row.original.doctorName;
           const gender = row.original.gender;
           const type = row.original.doctorType;
+          const thumbnailUrl = row.original.thumbnail_url;
           return (
             <div className="flex items-center gap-3 py-1">
               <Avatar className="h-9 w-9 shrink-0">
+                {thumbnailUrl && (
+                  <AvatarImage src={thumbnailUrl} alt={name} className="object-cover" />
+                )}
                 <AvatarFallback className="bg-emerald-200 text-emerald-800 text-xs font-extrabold dark:bg-emerald-950/40 dark:text-emerald-300">
                   {getInitials(name)}
                 </AvatarFallback>

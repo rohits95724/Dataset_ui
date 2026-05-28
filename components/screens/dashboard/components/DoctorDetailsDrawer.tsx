@@ -179,7 +179,7 @@ export const DoctorDetailsDrawer: React.FC<DoctorDetailsProps> = ({ doctor }) =>
               {renderVerificationPill(!!details.isQualificationsVerified, "Degree")}
               {renderVerificationPill(!!details.isWorkVerified, "Practice Info")}
               {renderVerificationPill(!!details.isPhoneVerified, "Mobile No")}
-              {renderVerificationPill(!!details.isEmailVerified, "Email Address")}
+              {(details.email || details.emailOfficial || details.emailPublic) && renderVerificationPill(!!details.isEmailVerified, "Email Address")}
             </div>
           </div>
 
@@ -219,7 +219,7 @@ export const DoctorDetailsDrawer: React.FC<DoctorDetailsProps> = ({ doctor }) =>
                     </div>
                   </div>
                 )}
-                {(!details.emailOfficial && !details.emailPublic) && (
+                {(!details.emailOfficial && !details.emailPublic && details.email) && (
                   <div className="flex items-start gap-3">
                     <div className="p-1.5 rounded-lg bg-zinc-50 text-muted-foreground mt-0.5">
                       <Mail className="w-4 h-4" />
@@ -227,7 +227,7 @@ export const DoctorDetailsDrawer: React.FC<DoctorDetailsProps> = ({ doctor }) =>
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Email Address</p>
                       <p className="text-xs font-bold truncate max-w-[280px] mt-0.5 text-zinc-900">
-                        {details.email || "N/A"}
+                        {details.email}
                       </p>
                     </div>
                   </div>

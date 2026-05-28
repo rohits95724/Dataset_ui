@@ -17,7 +17,7 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -118,6 +118,9 @@ export const DoctorEditDrawer: React.FC<DoctorEditProps> = ({ doctor }) => {
         <div className="relative bg-gradient-to-r from-emerald-800 via-emerald-900 to-teal-950 p-8 border-b border-zinc-200 dark:border-zinc-800 text-white shadow-xs shrink-0">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <Avatar className="h-20 w-20 ring-4 ring-emerald-500/20 bg-emerald-500/10 shadow-lg shrink-0">
+              {formData.profile_pic_url && (
+                <AvatarImage src={formData.profile_pic_url} alt={formData.doctorName} className="object-cover" />
+              )}
               <AvatarFallback className="bg-emerald-600 text-white font-extrabold text-2xl">
                 {getInitials(formData.doctorName || "User")}
               </AvatarFallback>

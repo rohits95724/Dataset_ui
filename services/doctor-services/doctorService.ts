@@ -3,6 +3,24 @@ import { Doctor, FilterOptionsResponse, PaginatedDoctorsResponse } from "@/types
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const normalizeImageUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.includes("localhost:8000")) {
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || "https://problock-api-825973751347.us-central1.run.app";
+    let origin = "https://problock-api-825973751347.us-central1.run.app";
+    try {
+      if (base.startsWith("http")) {
+        const urlObj = new URL(base);
+        origin = urlObj.origin;
+      }
+    } catch (e) {
+      console.error("Failed to parse NEXT_PUBLIC_API_BASE_URL", e);
+    }
+    return url.replace("http://localhost:8000", origin);
+  }
+  return url;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const normalizeDoctor = (item: any): Doctor => {
   const firstReg = Array.isArray(item.registrations) && item.registrations.length > 0 ? item.registrations[0] : null;
@@ -72,8 +90,8 @@ export const normalizeDoctor = (item: any): Doctor => {
     "doctors_work.facilityOwnership": item["doctors_work.facilityOwnership"] || item.facility_ownership || firstWork?.facility_ownership || "",
     "doctors_qualifications.collegeId.name": item["doctors_qualifications.collegeId.name"] || item.college_name || item.college || domesticQual?.college_name || internationalQual?.college_name || "",
     isForeignEducated: !!(item.isForeignEducated ?? item.is_foreign_educated),
-    profile_pic_url: item.profile_pic_url || item.profilePicUrl || null,
-    thumbnail_url: item.thumbnail_url || item.thumbnailUrl || null
+    profile_pic_url: normalizeImageUrl(item.profile_pic_url || item.profilePicUrl),
+    thumbnail_url: normalizeImageUrl(item.thumbnail_url || item.thumbnailUrl)
   };
 };
 
