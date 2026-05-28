@@ -4,14 +4,14 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Doctor } from "@/types/doctor";
+import { Doctor, MapDoctor } from "@/types/doctor";
 import { useModal } from "@/context/modal-context";
 import { DoctorDetailsDrawer } from "../../dashboard/components/DoctorDetailsDrawer";
 import { Button } from "@/components/ui/button";
 
 // Fix default leaflet icons
 const getInitials = (name: string) => {
-  return name
+  return (name || "DR")
     .replace("Dr. ", "")
     .split(" ")
     .slice(0, 2)
@@ -20,8 +20,8 @@ const getInitials = (name: string) => {
     .toUpperCase();
 };
 
-const createCustomMarker = (doctor: Doctor) => {
-  const initials = getInitials(doctor.doctorName || "DR");
+const createCustomMarker = (doctor: Doctor | MapDoctor) => {
+  const initials = getInitials(doctor.doctorName);
   return L.divIcon({
     html: `<div class="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs border-2 border-white shadow-lg transition-all duration-200 transform hover:scale-110 active:scale-95 cursor-pointer">${initials}</div>`,
     className: "custom-leaflet-marker",
@@ -31,22 +31,29 @@ const createCustomMarker = (doctor: Doctor) => {
   });
 };
 
+const getCoords = (doc: Doctor | MapDoctor) => {
+  const docRecord = doc as unknown as Record<string, unknown>;
+  const lat = Number(doc["doctors_work.facilityLat"] ?? docRecord.facility_lat ?? docRecord.facilityLat);
+  const lng = Number(doc["doctors_work.facilityLong"] ?? docRecord.facility_long ?? docRecord.facilityLong);
+  return { lat, lng };
+};
+
 interface MapViewProps {
-  doctors: Doctor[];
+  doctors: (Doctor | MapDoctor)[];
 }
 
 // Sub-component to fit map bounds to active markers
-const MapBoundsAdjuster: React.FC<{ doctorsWithCoords: Doctor[] }> = ({ doctorsWithCoords }) => {
+const MapBoundsAdjuster: React.FC<{ doctorsWithCoords: (Doctor | MapDoctor)[] }> = ({ doctorsWithCoords }) => {
   const map = useMap();
 
   useEffect(() => {
     if (doctorsWithCoords.length === 0) return;
 
     const bounds = L.latLngBounds(
-      doctorsWithCoords.map((doc) => [
-        Number(doc["doctors_work.facilityLat"]),
-        Number(doc["doctors_work.facilityLong"]),
-      ])
+      doctorsWithCoords.map((doc) => {
+        const { lat, lng } = getCoords(doc);
+        return [lat, lng];
+      })
     );
 
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
@@ -60,8 +67,7 @@ export default function MapView({ doctors }: MapViewProps) {
 
   // Filter doctors with valid lat/long
   const doctorsWithCoords = doctors.filter((doc) => {
-    const lat = Number(doc["doctors_work.facilityLat"]);
-    const lng = Number(doc["doctors_work.facilityLong"]);
+    const { lat, lng } = getCoords(doc);
     return lat && lng && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
   });
 
@@ -112,8 +118,10 @@ export default function MapView({ doctors }: MapViewProps) {
 
         <MarkerClusterGroup>
           {doctorsWithCoords.map((doc) => {
-            const lat = Number(doc["doctors_work.facilityLat"]);
-            const lng = Number(doc["doctors_work.facilityLong"]);
+            const { lat, lng } = getCoords(doc);
+            const subTitle = [doc.doctorType, doc.gender].filter(Boolean).join(" • ");
+            const hasDetailsCard = !!(doc.hospitalName || doc.hprWorkDetails___districtName || doc.hprSpecialitys);
+
             return (
               <Marker
                 key={doc.id}
@@ -126,35 +134,39 @@ export default function MapView({ doctors }: MapViewProps) {
                       <h4 className="font-bold text-sm text-zinc-950 leading-tight">
                         {doc.doctorName}
                       </h4>
-                      <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
-                        {doc.doctorType || "Practitioner"} • {doc.gender}
-                      </p>
+                      {subTitle && (
+                        <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">
+                          {subTitle}
+                        </p>
+                      )}
                     </div>
 
-                    <div className="text-xs space-y-1 bg-zinc-50 p-2 rounded border border-zinc-100 font-medium">
-                      {doc.hospitalName && (
-                        <p className="truncate text-zinc-700">
-                          <span className="font-bold text-zinc-800 text-[10px] uppercase block tracking-wider">Hospital</span>
-                          {doc.hospitalName}
-                        </p>
-                      )}
-                      {doc.hprWorkDetails___districtName && (
-                        <p className="truncate text-zinc-700 mt-1">
-                          <span className="font-bold text-zinc-800 text-[10px] uppercase block tracking-wider">Location</span>
-                          {doc.hprWorkDetails___districtName}, {doc.hprWorkDetails___stateName}
-                        </p>
-                      )}
-                      {doc.hprSpecialitys && (
-                        <p className="truncate text-zinc-700 mt-1">
-                          <span className="font-bold text-zinc-800 text-[10px] uppercase block tracking-wider">Specialty</span>
-                          {doc.hprSpecialitys}
-                        </p>
-                      )}
-                    </div>
+                    {hasDetailsCard && (
+                      <div className="text-xs space-y-1 bg-zinc-50 p-2 rounded border border-zinc-100 font-medium">
+                        {doc.hospitalName && (
+                          <p className="truncate text-zinc-700">
+                            <span className="font-bold text-zinc-800 text-[10px] uppercase block tracking-wider">Hospital</span>
+                            {doc.hospitalName}
+                          </p>
+                        )}
+                        {doc.hprWorkDetails___districtName && (
+                          <p className="truncate text-zinc-700 mt-1">
+                            <span className="font-bold text-zinc-800 text-[10px] uppercase block tracking-wider">Location</span>
+                            {doc.hprWorkDetails___districtName}, {doc.hprWorkDetails___stateName || ""}
+                          </p>
+                        )}
+                        {doc.hprSpecialitys && (
+                          <p className="truncate text-zinc-700 mt-1">
+                            <span className="font-bold text-zinc-800 text-[10px] uppercase block tracking-wider">Specialty</span>
+                            {doc.hprSpecialitys}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <Button
                       size="sm"
-                      onClick={() => openDrawer(<DoctorDetailsDrawer doctor={doc} />)}
+                      onClick={() => openDrawer(<DoctorDetailsDrawer doctor={doc as Doctor} />)}
                       className="w-full h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer transition-all"
                     >
                       View Full Profile

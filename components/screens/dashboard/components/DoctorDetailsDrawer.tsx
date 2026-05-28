@@ -18,7 +18,7 @@ import {
   GraduationCap,
   Globe2,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/context/modal-context";
 import { useAuth } from "@/context/auth-context";
@@ -128,6 +128,9 @@ export const DoctorDetailsDrawer: React.FC<DoctorDetailsProps> = ({ doctor }) =>
         <div className="relative bg-gradient-to-r from-emerald-800 via-emerald-900 to-teal-950 p-8 border-b border-zinc-200 text-white shadow-xs">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <Avatar className="h-24 w-24 ring-4 ring-emerald-500/20 bg-emerald-500/10 shadow-lg shrink-0">
+              {details.profile_pic_url && (
+                <AvatarImage src={details.profile_pic_url} alt={details.doctorName} className="object-cover" />
+              )}
               <AvatarFallback className="bg-emerald-600 text-white font-extrabold text-3xl">
                 {getInitials(details.doctorName || "User")}
               </AvatarFallback>

@@ -1,13 +1,14 @@
 "use client";
-import React, { useMemo, useEffect, Suspense } from "react";
+import React, { useMemo, useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, AlertTriangle, RefreshCw, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
-import { useDataset } from "@/context/dataset-context";
+import { useDataset, FilterState } from "@/context/dataset-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Doctor } from "@/types/doctor";
+import { Doctor, MapDoctor } from "@/types/doctor";
+import { mapService } from "@/services/doctor-services/mapService";
 
 const MapView = dynamic(() => import("./components/MapView"), {
   ssr: false,
@@ -21,6 +22,59 @@ const MapView = dynamic(() => import("./components/MapView"), {
   ),
 });
 
+// Parameter construction helper matching the filters definition
+const buildQueryParams = (filters: FilterState) => {
+  const params = new URLSearchParams();
+  const { globalSearch, columnFilters } = filters;
+
+  if (globalSearch && globalSearch.trim() !== "") {
+    params.append("q", globalSearch.trim());
+  }
+
+  const gov = columnFilters["doctors_main.governmentEmployee"];
+  if (gov && gov !== "all") {
+    params.append("government_employee", gov);
+  }
+
+  const foreign = columnFilters["isForeignEducated"];
+  if (foreign && foreign !== "all") {
+    params.append("is_foreign_educated", foreign);
+  }
+
+  const exp = columnFilters["workExperienceInYear"];
+  if (exp) {
+    if (exp.min !== undefined && exp.min !== "") {
+      params.append("experience_min", String(exp.min));
+    }
+    if (exp.max !== undefined && exp.max !== "") {
+      params.append("experience_max", String(exp.max));
+    }
+  }
+
+  const appendArrayParam = (paramName: string, filterKey: string) => {
+    const filterVals = columnFilters[filterKey];
+    if (Array.isArray(filterVals) && filterVals.length > 0) {
+      filterVals.forEach((val) => {
+        params.append(paramName, String(val));
+      });
+    }
+  };
+
+  appendArrayParam("specialty", "hprSpecialitys");
+  appendArrayParam("system_of_medicine", "systemOfMedicine");
+  appendArrayParam("state_source", "doctors_main.stateName");
+  appendArrayParam("verification_status", "doctors_work.verificationStatus");
+  appendArrayParam("facility_type", "doctors_work.facilityType");
+  appendArrayParam("facility_ownership", "doctors_work.facilityOwnership");
+  appendArrayParam("college_name", "doctors_qualifications.collegeId.name");
+  appendArrayParam("doctor_type", "doctorType");
+  appendArrayParam("gender", "gender");
+  appendArrayParam("pi_language", "piLanguage");
+  appendArrayParam("course_name", "doctorMedicalQualifications___courseId_name");
+
+  return params;
+};
+
 export default function MapScreen() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -29,7 +83,13 @@ export default function MapScreen() {
     data,
     filters,
     setFilterPanelOpen,
+    isApiMode,
   } = useDataset();
+
+  // Local state for lightweight map markers fetched from API
+  const [mapDoctors, setMapDoctors] = useState<MapDoctor[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   // Auth Guard redirect
   useEffect(() => {
@@ -75,6 +135,52 @@ export default function MapScreen() {
     return false;
   }, [filters]);
 
+  const fetchMapDoctors = useCallback(async () => {
+    if (!isAuthenticated || !isFilterActive) {
+      setMapDoctors([]);
+      return;
+    }
+
+    setIsLoading(true);
+    setIsError(false);
+
+    try {
+      const params = buildQueryParams(filters);
+      // Fetch up to 1000 markers for geospatial visualization
+      params.append("limit", "1000");
+
+      const res = await mapService.getDoctors(params);
+      setMapDoctors(res.items);
+    } catch (err) {
+      console.error("Error fetching map doctors:", err);
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, isFilterActive, filters]);
+
+  // Debounced API fetch when filters update
+  useEffect(() => {
+    if (!isApiMode) {
+      return;
+    }
+
+    if (!isFilterActive) {
+      setMapDoctors([]);
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      fetchMapDoctors();
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [filters, isApiMode, isFilterActive, fetchMapDoctors]);
+
+  const showMap = isFilterActive && (isApiMode || originalData.length > 0);
+  const doctorsToRender = isApiMode ? mapDoctors : (data as Doctor[]);
+  const matchingCount = isApiMode ? mapDoctors.length : data.length;
+
   if (authLoading || !isAuthenticated) {
     return (
       <div className="flex h-[calc(100vh-64px)] items-center justify-center">
@@ -98,7 +204,7 @@ export default function MapScreen() {
         </Button>
       </div>
 
-      {isFilterActive && originalData.length > 0 ? (
+      {showMap ? (
         /* Map View is active and ready */
         <div className="space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -108,7 +214,7 @@ export default function MapScreen() {
                   Practitioner Geospatial Map
                 </h1>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-2xs">
-                  {data.length} Matching Records
+                  {matchingCount} Matching Records
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -117,8 +223,33 @@ export default function MapScreen() {
             </div>
           </div>
 
-          <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 shadow-xs rounded-xl overflow-hidden p-3.5 flex flex-col">
-            <MapView doctors={data as Doctor[]} />
+          <Card className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 shadow-xs rounded-xl overflow-hidden p-3.5 flex flex-col min-h-[580px] justify-center">
+            {isLoading ? (
+              <div className="w-full h-[580px] flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950/20 rounded-xl">
+                <Loader2 className="w-10 h-10 animate-spin text-emerald-600 mb-2" />
+                <p className="text-xs font-semibold text-zinc-550 dark:text-zinc-450 animate-pulse">
+                  Fetching lightweight coordinates...
+                </p>
+              </div>
+            ) : isError ? (
+              <div className="w-full h-[580px] flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950/20 p-6 text-center rounded-xl">
+                <AlertTriangle className="w-12 h-12 text-rose-500 mb-3" />
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-white">API Fetch Failed</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1 mb-4">
+                  Failed to load doctor coordinates from the database. Please check your network connection and try again.
+                </p>
+                <Button
+                  onClick={fetchMapDoctors}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Retry Connection
+                </Button>
+              </div>
+            ) : (
+              <MapView doctors={doctorsToRender} />
+            )}
           </Card>
         </div>
       ) : (

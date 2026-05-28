@@ -71,7 +71,9 @@ export const normalizeDoctor = (item: any): Doctor => {
     "doctors_work.facilityType": item["doctors_work.facilityType"] || item.facility_type || firstWork?.facility_type || "",
     "doctors_work.facilityOwnership": item["doctors_work.facilityOwnership"] || item.facility_ownership || firstWork?.facility_ownership || "",
     "doctors_qualifications.collegeId.name": item["doctors_qualifications.collegeId.name"] || item.college_name || item.college || domesticQual?.college_name || internationalQual?.college_name || "",
-    isForeignEducated: !!(item.isForeignEducated ?? item.is_foreign_educated)
+    isForeignEducated: !!(item.isForeignEducated ?? item.is_foreign_educated),
+    profile_pic_url: item.profile_pic_url || item.profilePicUrl || null,
+    thumbnail_url: item.thumbnail_url || item.thumbnailUrl || null
   };
 };
 

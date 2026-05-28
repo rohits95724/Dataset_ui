@@ -83,6 +83,8 @@ export interface Doctor {
   "doctors_work.facilityOwnership"?: string;
   "doctors_qualifications.collegeId.name"?: string;
   isForeignEducated?: boolean;
+  profile_pic_url?: string | null;
+  thumbnail_url?: string | null;
 }
 
 export interface PaginatedDoctorsResponse {
@@ -99,4 +101,35 @@ export interface FilterOptionsResponse {
   specialties: string[];
   workplace_verification_statuses: string[];
   colleges: string[];
+}
+
+// we have to create the response of the map which comes from 
+// GET /api/doctors/map
+// Query Params: filters (existing filter logic)
+
+// Returns: Array of {id, doctorName, facility_lat, facility_long
+export interface MapDoctor {
+  id: string | number;
+  doctorName: string;
+  
+  // Coordinate fields (support both lightweight raw and nested formats)
+  "doctors_work.facilityLat"?: number;
+  "doctors_work.facilityLong"?: number;
+  facility_lat?: number;
+  facility_long?: number;
+
+  // Optional lightweight fields for preview/popup if returned by API
+  gender?: string;
+  doctorType?: string;
+  hospitalName?: string;
+  hprWorkDetails___districtName?: string;
+  hprWorkDetails___stateName?: string;
+  hprSpecialitys?: string;
+  profile_pic_url?: string | null;
+  thumbnail_url?: string | null;
+}
+
+export interface PaginatedMapDoctorsResponse {
+  items: MapDoctor[];
+  next_cursor: string | null;
 }
