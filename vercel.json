@@ -3,26 +3,6 @@
   "devCommand": "next dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "functions": {
-    "api/**/*.ts": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
-  },
-  "env": [
-    {
-      "key": "NEXTAUTH_SECRET",
-      "description": "NextAuth secret key for encryption"
-    },
-    {
-      "key": "NEXTAUTH_URL",
-      "description": "NextAuth callback URL"
-    },
-    {
-      "key": "NEXT_PUBLIC_API_URL",
-      "description": "Public API URL for frontend"
-    }
-  ],
   "headers": [
     {
       "source": "/api/:path*",

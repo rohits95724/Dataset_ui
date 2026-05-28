@@ -19,6 +19,8 @@ import {
   ArrowUpDown,
   Sparkles,
   RefreshCw,
+  MapPin,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { useDataset } from "@/context/dataset-context";
@@ -26,6 +28,8 @@ import { useToast } from "@/context/toast-context";
 import { useModal } from "@/context/modal-context";
 import { DoctorDetailsDrawer } from "./components/DoctorDetailsDrawer";
 import { DoctorEditDrawer } from "./components/DoctorEditDrawer";
+import { MapViewHOC } from "./components/MapViewHOC";
+import { Doctor } from "@/types/doctor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -61,14 +65,62 @@ export default function Dashboard() {
     setLimit,
     goToNextPage,
     goToPrevPage,
+    setFilterPanelOpen,
   } = useDataset();
   const { addToast } = useToast();
   const { openDrawer } = useModal();
 
-  // Table state
+  // Table & Map state
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+  
+  const [mapViewActive, setMapViewActive] = useState(false);
+  const [showMapWarning, setShowMapWarning] = useState(false);
+
+  // Check if any filters are active
+  const isFilterActive = useMemo(() => {
+    if (filters.globalSearch && filters.globalSearch.trim() !== "") {
+      return true;
+    }
+
+    const colFilters = filters.columnFilters || {};
+    for (const key of Object.keys(colFilters)) {
+      const val = colFilters[key];
+      if (key === "gpsProximity") {
+        if (val && (val.lat !== null || val.lng !== null || (val.radius && val.radius !== ""))) {
+          return true;
+        }
+      } else if (key === "doctors_main.governmentEmployee" || key === "isForeignEducated") {
+        if (val && val !== "all") {
+          return true;
+        }
+      } else if (Array.isArray(val)) {
+        if (val.length > 0) {
+          return true;
+        }
+      } else if (val && typeof val === "object") {
+        if (
+          (val.min !== undefined && val.min !== "") ||
+          (val.max !== undefined && val.max !== "") ||
+          (val.start !== undefined && val.start !== "") ||
+          (val.end !== undefined && val.end !== "")
+        ) {
+          return true;
+        }
+      } else if (typeof val === "string" && val.trim() !== "") {
+        return true;
+      }
+    }
+    return false;
+  }, [filters]);
+
+  // Fallback to table view if all filters are cleared
+  useEffect(() => {
+    if (!isFilterActive && mapViewActive) {
+      setMapViewActive(false);
+    }
+  }, [isFilterActive, mapViewActive]);
 
   // Auth Guard redirect
   useEffect(() => {
@@ -404,6 +456,26 @@ export default function Dashboard() {
 
                 {/* Toolbar buttons */}
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant={mapViewActive ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      if (isFilterActive) {
+                        setMapViewActive(!mapViewActive);
+                      } else {
+                        setShowMapWarning(true);
+                      }
+                    }}
+                    className={`h-8.5 text-xs font-semibold cursor-pointer ${
+                      mapViewActive
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white border-transparent"
+                        : "border-zinc-200 dark:border-zinc-800"
+                    }`}
+                  >
+                    <MapPin className="w-3.5 h-3.5 mr-1.5" />
+                    Map View
+                  </Button>
+
                   {/* Dynamic Columns Visibility Selector */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -444,64 +516,70 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Scrollable Table viewport */}
-              <div className="relative overflow-x-auto overflow-y-auto max-h-[580px] w-full min-h-[300px]">
-                <table className="w-full text-left border-collapse">
-                  {/* Sticky Header */}
-                  <thead className="sticky top-0 z-10 bg-zinc-50 border-b border-zinc-200 dark:bg-zinc-950 dark:border-zinc-800">
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <tr key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <th
-                            key={header.id}
-                            className="p-3.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-xs"
-                            style={{ width: header.getSize() }}
-                          >
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(header.column.columnDef.header, header.getContext())}
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </thead>
-
-                  {/* Table body */}
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 bg-white dark:bg-zinc-900/10">
-                    {table.getRowModel().rows.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={tableColumns.length}
-                          className="p-16 text-center text-xs text-muted-foreground font-medium"
-                        >
-                          <div className="flex flex-col items-center justify-center space-y-2">
-                            <Database className="w-6 h-6 text-zinc-300 dark:text-zinc-700 animate-pulse" />
-                            <p className="font-semibold text-zinc-850 dark:text-zinc-100 text-sm">
-                              No practitioners found
-                            </p>
-                            <p className="max-w-xs leading-relaxed text-[11px]">
-                              No clinician records match the current filter checks on the left. Reset filters or broaden your keyword search.
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      table.getRowModel().rows.map((row) => (
-                        <tr
-                          key={row.id}
-                          className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors"
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <td key={cell.id} className="p-3.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[220px]">
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </td>
+              {/* Conditional viewport: Map View or Table View */}
+              {mapViewActive ? (
+                <div className="p-3.5 bg-white dark:bg-zinc-950/20 w-full min-h-[300px]">
+                  <MapViewHOC doctors={data as Doctor[]} />
+                </div>
+              ) : (
+                <div className="relative overflow-x-auto overflow-y-auto max-h-[580px] w-full min-h-[300px]">
+                  <table className="w-full text-left border-collapse">
+                    {/* Sticky Header */}
+                    <thead className="sticky top-0 z-10 bg-zinc-50 border-b border-zinc-200 dark:bg-zinc-950 dark:border-zinc-800">
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <tr key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => (
+                            <th
+                              key={header.id}
+                              className="p-3.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-xs"
+                              style={{ width: header.getSize() }}
+                            >
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(header.column.columnDef.header, header.getContext())}
+                            </th>
                           ))}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </thead>
+
+                    {/* Table body */}
+                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 bg-white dark:bg-zinc-900/10">
+                      {table.getRowModel().rows.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={tableColumns.length}
+                            className="p-16 text-center text-xs text-muted-foreground font-medium"
+                          >
+                            <div className="flex flex-col items-center justify-center space-y-2">
+                              <Database className="w-6 h-6 text-zinc-300 dark:text-zinc-700 animate-pulse" />
+                              <p className="font-semibold text-zinc-850 dark:text-zinc-100 text-sm">
+                                No practitioners found
+                              </p>
+                              <p className="max-w-xs leading-relaxed text-[11px]">
+                                No clinician records match the current filter checks on the left. Reset filters or broaden your keyword search.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        table.getRowModel().rows.map((row) => (
+                          <tr
+                            key={row.id}
+                            className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors"
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} className="p-3.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[220px]">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {/* Pagination Controls */}
               <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 text-[11px]">
@@ -597,6 +675,42 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+
+      {showMapWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4 animate-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="p-2 bg-amber-50 rounded-full">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Active Filter Required</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              To view the doctor registry on the map, you must first apply at least one filter (e.g. search keyword, specialty, location, or facility type). This keeps the map readable and performant.
+            </p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-150 dark:border-zinc-850">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowMapWarning(false);
+                  setFilterPanelOpen(true);
+                }}
+                className="text-xs font-semibold cursor-pointer h-8"
+              >
+                Open Filters Panel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowMapWarning(false)}
+                className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer h-8"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

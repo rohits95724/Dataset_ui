@@ -1,3 +1,37 @@
+export interface Registration {
+  id?: number;
+  council_name: string;
+  registration_no: string;
+  registration_date: string;
+  due_date: string;
+  is_renewable: string;
+  is_nuid: boolean;
+  council_status: string;
+  status: string;
+}
+
+export interface Qualification {
+  id?: number;
+  course_name: string;
+  country_name?: string;
+  college_name: string;
+  university_name: string;
+  qualification_year: number;
+  qualification_month?: string;
+  active: boolean;
+}
+
+export interface Workplace {
+  id?: number;
+  facility_name?: string;
+  facility_type?: string;
+  facility_ownership?: string;
+  district_name?: string;
+  state_name?: string;
+  facility_lat?: number;
+  facility_long?: number;
+}
+
 export interface Doctor {
   id: string | number;
   doctorName: string;
@@ -25,6 +59,19 @@ export interface Doctor {
   isEmailVerified: boolean;
   isQualificationsVerified: boolean;
   isWorkVerified: boolean;
+
+  // Additional detail fields from live API response
+  hprId?: string;
+  applicationStatus?: string;
+  areYouCurrentlyWorking?: boolean;
+  profileCompleted?: boolean;
+  emailOfficial?: string;
+  emailPublic?: string;
+  publicMobileNumber?: string;
+  registrations?: Registration[];
+  qualificationsDomestic?: Qualification[];
+  qualificationsInternational?: Qualification[];
+  workplaces?: Workplace[];
 
   // Nested backend database columns / specific fields
   "doctors_work.facilityLat"?: number;
