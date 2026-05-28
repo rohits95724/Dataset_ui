@@ -28,7 +28,6 @@ import { useToast } from "@/context/toast-context";
 import { useModal } from "@/context/modal-context";
 import { DoctorDetailsDrawer } from "./components/DoctorDetailsDrawer";
 import { DoctorEditDrawer } from "./components/DoctorEditDrawer";
-import { MapViewHOC } from "./components/MapViewHOC";
 import { Doctor } from "@/types/doctor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,8 +73,6 @@ export default function Dashboard() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
-  
-  const [mapViewActive, setMapViewActive] = useState(false);
   const [showMapWarning, setShowMapWarning] = useState(false);
 
   // Check if any filters are active
@@ -115,12 +112,7 @@ export default function Dashboard() {
     return false;
   }, [filters]);
 
-  // Fallback to table view if all filters are cleared
-  useEffect(() => {
-    if (!isFilterActive && mapViewActive) {
-      setMapViewActive(false);
-    }
-  }, [isFilterActive, mapViewActive]);
+
 
   // Auth Guard redirect
   useEffect(() => {
@@ -457,20 +449,16 @@ export default function Dashboard() {
                 {/* Toolbar buttons */}
                 <div className="flex items-center gap-2">
                   <Button
-                    variant={mapViewActive ? "default" : "outline"}
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       if (isFilterActive) {
-                        setMapViewActive(!mapViewActive);
+                        router.push("/map");
                       } else {
                         setShowMapWarning(true);
                       }
                     }}
-                    className={`h-8.5 text-xs font-semibold cursor-pointer ${
-                      mapViewActive
-                        ? "bg-emerald-600 hover:bg-emerald-500 text-white border-transparent"
-                        : "border-zinc-200 dark:border-zinc-800"
-                    }`}
+                    className="h-8.5 text-xs font-semibold cursor-pointer border-zinc-200 dark:border-zinc-800"
                   >
                     <MapPin className="w-3.5 h-3.5 mr-1.5" />
                     Map View
@@ -516,70 +504,63 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Conditional viewport: Map View or Table View */}
-              {mapViewActive ? (
-                <div className="p-3.5 bg-white dark:bg-zinc-950/20 w-full min-h-[300px]">
-                  <MapViewHOC doctors={data as Doctor[]} />
-                </div>
-              ) : (
-                <div className="relative overflow-x-auto overflow-y-auto max-h-[580px] w-full min-h-[300px]">
-                  <table className="w-full text-left border-collapse">
-                    {/* Sticky Header */}
-                    <thead className="sticky top-0 z-10 bg-zinc-50 border-b border-zinc-200 dark:bg-zinc-950 dark:border-zinc-800">
-                      {table.getHeaderGroups().map((headerGroup) => (
-                        <tr key={headerGroup.id}>
-                          {headerGroup.headers.map((header) => (
-                            <th
-                              key={header.id}
-                              className="p-3.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-xs"
-                              style={{ width: header.getSize() }}
-                            >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(header.column.columnDef.header, header.getContext())}
-                            </th>
+              <div className="relative overflow-x-auto overflow-y-auto max-h-[580px] w-full min-h-[300px]">
+                <table className="w-full text-left border-collapse">
+                  {/* Sticky Header */}
+                  <thead className="sticky top-0 z-10 bg-zinc-50 border-b border-zinc-200 dark:bg-zinc-950 dark:border-zinc-800">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <th
+                            key={header.id}
+                            className="p-3.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-xs"
+                            style={{ width: header.getSize() }}
+                          >
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(header.column.columnDef.header, header.getContext())}
+                          </th>
+                        ))}
+                      </tr>
+                    ))}
+                  </thead>
+
+                  {/* Table body */}
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 bg-white dark:bg-zinc-900/10">
+                    {table.getRowModel().rows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={tableColumns.length}
+                          className="p-16 text-center text-xs text-muted-foreground font-medium"
+                        >
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <Database className="w-6 h-6 text-zinc-300 dark:text-zinc-700 animate-pulse" />
+                            <p className="font-semibold text-zinc-850 dark:text-zinc-100 text-sm">
+                              No practitioners found
+                            </p>
+                            <p className="max-w-xs leading-relaxed text-[11px]">
+                              No clinician records match the current filter checks on the left. Reset filters or broaden your keyword search.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      table.getRowModel().rows.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors"
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <td key={cell.id} className="p-3.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[220px]">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
                           ))}
                         </tr>
-                      ))}
-                    </thead>
-
-                    {/* Table body */}
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 bg-white dark:bg-zinc-900/10">
-                      {table.getRowModel().rows.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={tableColumns.length}
-                            className="p-16 text-center text-xs text-muted-foreground font-medium"
-                          >
-                            <div className="flex flex-col items-center justify-center space-y-2">
-                              <Database className="w-6 h-6 text-zinc-300 dark:text-zinc-700 animate-pulse" />
-                              <p className="font-semibold text-zinc-850 dark:text-zinc-100 text-sm">
-                                No practitioners found
-                              </p>
-                              <p className="max-w-xs leading-relaxed text-[11px]">
-                                No clinician records match the current filter checks on the left. Reset filters or broaden your keyword search.
-                              </p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        table.getRowModel().rows.map((row) => (
-                          <tr
-                            key={row.id}
-                            className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors"
-                          >
-                            {row.getVisibleCells().map((cell) => (
-                              <td key={cell.id} className="p-3.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[220px]">
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                              </td>
-                            ))}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Pagination Controls */}
               <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-zinc-50/50 dark:bg-zinc-950/20 text-[11px]">
